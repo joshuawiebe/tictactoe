@@ -233,12 +233,11 @@ export default function App() {
      UI helpers - get background class
      --------------------------- */
   const getBackgroundClass = () => {
-    const mode = settings.darkMode ? "dark" : "light";
-    if (winner === "X") return `bg-red`;
-    if (winner === "O") return `bg-blue`;
-    if (isDraw) return `bg-gray`;
-    if (gameMode === "menu" || gameMode === "difficulty" || gameMode === "settings") return `bg-menu`;
-    return isXNext ? `bg-red` : `bg-blue`;
+    if (winner === "X") return "bg-red";
+    if (winner === "O") return "bg-blue";
+    if (isDraw) return "bg-gray";
+    if (gameMode === "menu" || gameMode === "difficulty" || gameMode === "settings") return "bg-menu";
+    return isXNext ? "bg-red" : "bg-blue";
   };
 
   /* ---------------------------
@@ -335,10 +334,8 @@ export default function App() {
   );
 
   /* ---------------------------
-     Menu / Difficulty / Settings views rendered inline
+     Menu / Difficulty / Settings views
      --------------------------- */
-
-  // Settings screen
   if (gameMode === "settings") {
     return (
       <div className={`app-container ${getBackgroundClass()} ${settings.darkMode ? "dark" : ""}`}>
@@ -379,7 +376,6 @@ export default function App() {
     );
   }
 
-  // Difficulty selection screen
   if (gameMode === "difficulty") {
     return (
       <div className={`app-container ${getBackgroundClass()} ${settings.darkMode ? "dark" : ""}`}>
@@ -397,8 +393,10 @@ export default function App() {
                 onClick={() => { setDifficulty(level); setGameMode("bot"); resetGame(); }}
                 className={`option ${difficulty === level ? "active" : ""}`}
               >
-                <div className="opt-title">{label}</div>
-                <div className="opt-desc">{desc}</div>
+                <div>
+                  <div className="opt-title">{label}</div>
+                  <div className="opt-desc">{desc}</div>
+                </div>
               </button>
             ))}
           </div>
@@ -409,7 +407,6 @@ export default function App() {
     );
   }
 
-  // Main menu
   if (gameMode === "menu") {
     return (
       <div className={`app-container ${getBackgroundClass()} ${settings.darkMode ? "dark" : ""}`}>
