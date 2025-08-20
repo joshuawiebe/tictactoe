@@ -2,21 +2,61 @@ import React, { useState, useEffect, useRef } from "react";
 import "./tic-tac-toe.css";
 
 export default function App() {
+  // Local storage keys
+  const LS_SCORES = "ttt_scores";
+  const LS_SETTINGS = "ttt_settings";
+  const LS_BOARD = "ttt_board";
+  const LS_IS_X_NEXT = "ttt_is_x_next";
+
   // States
   const [gameMode, setGameMode] = useState("menu"); // 'menu', 'friend', 'bot', 'difficulty', 'settings'
   const [difficulty, setDifficulty] = useState("easy");
-  const [board, setBoard] = useState(Array(9).fill(null));
-  const [isXNext, setIsXNext] = useState(true);
+  const [board, setBoard] = useState(() => {
+    try {
+      const val = localStorage.getItem(LS_BOARD);
+      return val ? JSON.parse(val) : Array(9).fill(null);
+    } catch { return Array(9).fill(null); }
+  });
+  const [isXNext, setIsXNext] = useState(() => {
+    try {
+      const val = localStorage.getItem(LS_IS_X_NEXT);
+      return val ? JSON.parse(val) : true;
+    } catch { return true; }
+  });
   const [showTurnIndicator, setShowTurnIndicator] = useState(false);
-  const [scores, setScores] = useState({ red: 0, blue: 0 });
+  const [scores, setScores] = useState(() => {
+    try {
+      const val = localStorage.getItem(LS_SCORES);
+      return val ? JSON.parse(val) : { red: 0, blue: 0 };
+    } catch { return { red: 0, blue: 0 }; }
+  });
   const [isHolding, setIsHolding] = useState(false);
   const [holdProgress, setHoldProgress] = useState(0);
-  const [settings, setSettings] = useState({ sound: true, darkMode: false });
+  const [settings, setSettings] = useState(() => {
+    try {
+      const val = localStorage.getItem(LS_SETTINGS);
+      return val ? JSON.parse(val) : { sound: true, darkMode: false };
+    } catch { return { sound: true, darkMode: false }; }
+  });
   const [botThinking, setBotThinking] = useState(false);
 
   // refs for hold-to-return timers
   const holdTimerRef = useRef(null);
   const progressIntervalRef = useRef(null);
+
+  // Save scores, settings, board, isXNext to localStorage on change
+  useEffect(() => {
+    localStorage.setItem(LS_SCORES, JSON.stringify(scores));
+  }, [scores]);
+  useEffect(() => {
+    localStorage.setItem(LS_SETTINGS, JSON.stringify(settings));
+  }, [settings]);
+  useEffect(() => {
+    localStorage.setItem(LS_BOARD, JSON.stringify(board));
+  }, [board]);
+  useEffect(() => {
+    localStorage.setItem(LS_IS_X_NEXT, JSON.stringify(isXNext));
+  }, [isXNext]);
 
   /* ---------------------------
      Helper functions & AI
@@ -170,9 +210,10 @@ export default function App() {
     };
   }, []);
 
-  /* ---------------------------
-     Bot move effect (thinking animation)
-     --------------------------- */
+  // Bot move effect (thinking animation)
+  // Track which square AI just set for animation
+  const [aiMoveIndex, setAiMoveIndex] = useState(null);
+
   useEffect(() => {
     if (gameMode === "bot" && !isXNext && !winner && !isDraw) {
       setBotThinking(true);
@@ -183,6 +224,7 @@ export default function App() {
         if (botMove !== null) {
           squares[botMove] = "O";
           setBoard(squares);
+          setAiMoveIndex(botMove);
           setIsXNext(true);
         }
         setBotThinking(false);
@@ -196,6 +238,14 @@ export default function App() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [board, isXNext, gameMode, difficulty, winner, isDraw]);
+
+  // Clear AI move animation after a short time
+  useEffect(() => {
+    if (aiMoveIndex !== null) {
+      const t = setTimeout(() => setAiMoveIndex(null), 700);
+      return () => clearTimeout(t);
+    }
+  }, [aiMoveIndex]);
 
   /* ---------------------------
      Turn indicator effect
@@ -243,15 +293,42 @@ export default function App() {
   /* ---------------------------
      Small presentational components
      --------------------------- */
-  const XIcon = ({ className = "", size = 48, shrinking = false }) => (
-    <svg className={`icon ${className} ${shrinking ? "shrink" : ""}`} width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round">
-      <path d="M18 6L6 18M6 6l12 12" />
+
+  // Unified SVG icon style: viewBox 0 0 24 24, strokeWidth 2.2, currentColor, centered
+  const XIcon = ({ className = "", size = 24, color = "currentColor", strokeWidth = 2.2, shrinking = false }) => (
+    <svg
+      className={`icon ${className} ${shrinking ? "shrink" : ""}`}
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke={color}
+      strokeWidth={strokeWidth}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      focusable="false"
+      style={{ display: "block" }}
+    >
+      <line x1="6" y1="6" x2="18" y2="18" />
+      <line x1="18" y1="6" x2="6" y2="18" />
     </svg>
   );
 
-  const OIcon = ({ className = "", size = 48, shrinking = false }) => (
-    <svg className={`icon ${className} ${shrinking ? "shrink" : ""}`} width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
-      <circle cx="12" cy="12" r="9" />
+  const OIcon = ({ className = "", size = 24, color = "currentColor", strokeWidth = 2.2, shrinking = false }) => (
+    <svg
+      className={`icon ${className} ${shrinking ? "shrink" : ""}`}
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke={color}
+      strokeWidth={strokeWidth}
+      aria-hidden="true"
+      focusable="false"
+      style={{ display: "block" }}
+    >
+      <circle cx="12" cy="12" r="7" />
     </svg>
   );
 
@@ -270,31 +347,80 @@ export default function App() {
       disabled={winner || isDraw || botThinking}
       aria-label={`square-${value ?? "empty"}`}
     >
-      {value === "X" && <XIcon className="x-icon" size={40} shrinking={isDraw} />}
-      {value === "O" && <OIcon className="o-icon" size={40} shrinking={isDraw} />}
+      {value === "X" && <XIcon className="x-icon" size={40} color="var(--red-500)" strokeWidth={4} shrinking={isDraw} />}
+      {value === "O" && <OIcon className="o-icon" size={40} color="var(--blue-500)" strokeWidth={4} shrinking={isDraw} />}
     </button>
   );
 
+  // Face-to-face turn indicator: modern, animated, color-accented, clear message
   const TurnIndicator = ({ isTop }) => {
     const isPlayerTurn = (isTop && !isXNext) || (!isTop && isXNext);
     const isBotTurn = gameMode === "bot" && !isTop && !isXNext;
     const shouldShow = (showTurnIndicator && isPlayerTurn && !winner && !isDraw) || (isBotTurn && botThinking);
-
+    const isActive = shouldShow;
+    const color = isBotTurn ? "var(--blue-500)" : (isTop ? (isXNext ? "var(--blue-500)" : "var(--red-500)") : (isXNext ? "var(--red-500)" : "var(--blue-500)"));
     return (
-      <div className={`turn-indicator ${isTop ? "top" : "bottom"} ${shouldShow ? "visible" : ""}`}>
-        <div className="turn-card">
+      <div className={`turn-indicator ${isTop ? "top" : "bottom"} ${isActive ? "visible" : ""}`}
+        style={{justifyContent: isTop ? "flex-start" : "flex-end", alignItems: isTop ? "flex-start" : "flex-end"}}
+      >
+        <div className="turn-card" style={{boxShadow: isActive ? `0 0 24px 4px ${color}33` : undefined, borderColor: color, background: isActive ? `${color}22` : undefined}}>
           {isBotTurn && botThinking ? (
-            <div className="bot-thinking">
-              <span className="small">Bot is thinking</span>
-              <ThinkingDots />
-            </div>
+            <>
+              <div className="magic-glow" style={{background: "repeating-linear-gradient(90deg, #60a5fa 0%, #a78bfa 20%, #f472b6 40%, #facc15 60%, #34d399 80%, #60a5fa 100%)", filter: "blur(8px)", opacity: 0.7, animation: "magicGlow 1.2s infinite alternate, flicker 0.7s infinite alternate"}} />
+              <div className="magic-dots">
+                <span className="magic-dot" style={{background: "#a78bfa"}} />
+                <span className="magic-dot" style={{background: "#f472b6"}} />
+                <span className="magic-dot" style={{background: "#facc15"}} />
+                <span className="magic-dot" style={{background: "#34d399"}} />
+                <span className="magic-dot" style={{background: "#60a5fa"}} />
+              </div>
+              <span style={{marginLeft: 18, fontWeight: 700, fontSize: '1.08em', color: color, letterSpacing: 0.5}}>AI is thinking...</span>
+            </>
           ) : (
-            <p className="small">It's your turn</p>
+            <span className="turn-message" style={{fontWeight: 700, fontSize: '1.18em', color, letterSpacing: 0.5, display: 'flex', alignItems: 'center', gap: 10, animation: isActive ? 'turnPulse 1.2s infinite alternate' : undefined}}>
+              {isTop === isXNext ? <OIcon size={32} color={color} strokeWidth={2.2} /> : <XIcon size={32} color={color} strokeWidth={2.2} />}
+              <span>It's your turn!</span>
+            </span>
           )}
         </div>
       </div>
     );
   };
+
+
+  // Unified ArrowIcon (left arrow)
+  const ArrowIcon = ({ size = 24, color = "currentColor", strokeWidth = 2.2, direction = "left" }) => {
+    // direction: "left", "right", "up", "down"
+    let rotate = 0;
+    if (direction === "up") rotate = -90;
+    if (direction === "down") rotate = 90;
+    if (direction === "right") rotate = 180;
+    return (
+      <svg
+        width={size}
+        height={size}
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke={color}
+        strokeWidth={strokeWidth}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        aria-hidden="true"
+        focusable="false"
+        style={{ display: "block", transform: `rotate(${rotate}deg)` }}
+      >
+        <polyline points="15 18 9 12 15 6" />
+      </svg>
+    );
+  };
+
+  // Modern hold-to-return button bottom left with circular progress and home icon
+  const HomeIcon = ({ size = 24, color = "currentColor", strokeWidth = 2.2 }) => (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false">
+      <path d="M3 11.5L12 4l9 7.5" />
+      <rect x="7" y="12" width="10" height="7" rx="2" />
+    </svg>
+  );
 
   const HoldToReturnButton = () => (
     <div className="hold-return">
@@ -306,36 +432,90 @@ export default function App() {
         onTouchEnd={handleHoldEnd}
         className="hold-button"
         aria-label="hold-to-return"
+        style={{ position: "relative" }}
       >
-        <svg className="arrow" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round">
-          <path d="M10 19l-7-7 7-7" />
+        <span className="hold-btn-content">
+          <HomeIcon size={28} color="var(--blue-500)" strokeWidth={2.2} />
+          <span className="hold-btn-label">Home</span>
+        </span>
+        <svg className="hold-circle" width="44" height="44" viewBox="0 0 44 44">
+          <circle
+            cx="22"
+            cy="22"
+            r="18"
+            fill="none"
+            stroke="var(--blue-500)"
+            strokeWidth="3.5"
+            strokeDasharray={Math.PI * 2 * 18}
+            strokeDashoffset={isHolding ? Math.PI * 2 * 18 * (1 - holdProgress / 100) : Math.PI * 2 * 18}
+            style={{ transition: isHolding ? "stroke-dashoffset 0.18s linear" : "stroke-dashoffset 0.32s cubic-bezier(.4,2,.6,1)" }}
+          />
         </svg>
-
-        <div
-          className="hold-beam"
-          style={{
-            height: `${holdProgress}%`,
-            opacity: isHolding ? 1 : 0,
-            boxShadow: isHolding ? "0 0 8px rgba(255,255,255,0.8), 0 0 16px rgba(255,255,255,0.4)" : "none"
-          }}
-        />
       </button>
     </div>
   );
 
+  // Face-to-face scoreboard: slanted, aligned to edges, readable from both sides
   const ScoreBoard = () => (
-    <div className="scoreboard">
-      <div className="score-card">
-        <div className="score-value red">{scores.red}</div>
-        <div className="score-sep" />
-        <div className="score-value blue">{scores.blue}</div>
+    <>
+      <div className="scoreboard scoreboard-top">
+        <div className="score-card" style={{transform: "skewY(-12deg)"}}>
+          <span className="score-label" style={{color: "var(--red-500)", fontWeight: 700, fontSize: 16, letterSpacing: 1}}>X</span>
+          <span className="score-value red">{scores.red}</span>
+        </div>
       </div>
-    </div>
+      <div className="scoreboard scoreboard-bottom">
+        <div className="score-card" style={{transform: "skewY(12deg) rotate(180deg)"}}>
+          <span className="score-label" style={{color: "var(--blue-500)", fontWeight: 700, fontSize: 16, letterSpacing: 1}}>O</span>
+          <span className="score-value blue">{scores.blue}</span>
+        </div>
+      </div>
+    </>
   );
 
   /* ---------------------------
      Menu / Difficulty / Settings views
      --------------------------- */
+
+  // Modern gear icon for Settings (inspired by Flaticon #3019014)
+  const SettingsIcon = ({ size = 24, color = "currentColor", strokeWidth = 2.2 }) => (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false">
+      <circle cx="12" cy="12" r="3.2" />
+      <g>
+        <path d="M12 2.5v2.2" />
+        <path d="M12 19.3v2.2" />
+        <path d="M4.22 4.22l1.56 1.56" />
+        <path d="M18.22 18.22l1.56 1.56" />
+        <path d="M2.5 12h2.2" />
+        <path d="M19.3 12h2.2" />
+        <path d="M4.22 19.78l1.56-1.56" />
+        <path d="M18.22 5.78l1.56-1.56" />
+      </g>
+      <circle cx="12" cy="12" r="7.2" />
+    </svg>
+  );
+
+  // Modern, bold, symmetrical left arrow for BackIcon
+  const BackIcon = ({ size = 32, color = "var(--blue-500)", strokeWidth = 2.2, show = false }) => (
+    <span className={`back-arrow-anim${show ? " show" : ""}`} style={{ display: "inline-block", verticalAlign: "middle" }}>
+      <svg
+        width={size}
+        height={size}
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke={color}
+        strokeWidth={strokeWidth}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        aria-hidden="true"
+        focusable="false"
+        style={{ display: "block" }}
+      >
+        <polyline points="16 5 8 12 16 19" />
+      </svg>
+    </span>
+  );
+
   if (gameMode === "settings") {
     return (
       <div className={`app-container ${getBackgroundClass()} ${settings.darkMode ? "dark" : ""}`}>
@@ -345,7 +525,7 @@ export default function App() {
           <div className="settings-list">
             <div className="setting-row">
               <div className="setting-info">
-                <span className="setting-icon">🔊</span>
+                <span className="setting-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12h22" /><path d="M12 1v22" /></svg></span>
                 <span className="setting-label">Sound</span>
               </div>
               <button
@@ -358,7 +538,7 @@ export default function App() {
 
             <div className="setting-row">
               <div className="setting-info">
-                <span className="setting-icon">🌙</span>
+                <span className="setting-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="8" /></svg></span>
                 <span className="setting-label">Dark Mode</span>
               </div>
               <button
@@ -370,7 +550,17 @@ export default function App() {
             </div>
           </div>
 
-          <button className="btn back-btn" onClick={() => setGameMode("menu")}>← Back</button>
+          <button
+            className="btn back-btn back-anim-btn"
+            onClick={() => setGameMode("menu")}
+            onMouseEnter={e => e.currentTarget.classList.add("show-arrow")}
+            onMouseLeave={e => e.currentTarget.classList.remove("show-arrow")}
+            onFocus={e => e.currentTarget.classList.add("show-arrow")}
+            onBlur={e => e.currentTarget.classList.remove("show-arrow")}
+          >
+            <BackIcon size={32} color="var(--blue-500)" strokeWidth={2.2} show={true} />
+            <span className="back-btn-label">Back</span>
+          </button>
         </div>
       </div>
     );
@@ -401,7 +591,17 @@ export default function App() {
             ))}
           </div>
 
-          <button className="btn back-btn" onClick={() => setGameMode("menu")}>← Back</button>
+          <button
+            className="btn back-btn back-anim-btn"
+            onClick={() => setGameMode("menu")}
+            onMouseEnter={e => e.currentTarget.classList.add("show-arrow")}
+            onMouseLeave={e => e.currentTarget.classList.remove("show-arrow")}
+            onFocus={e => e.currentTarget.classList.add("show-arrow")}
+            onBlur={e => e.currentTarget.classList.remove("show-arrow")}
+          >
+            <BackIcon size={32} color="var(--blue-500)" strokeWidth={2.2} show={true} />
+            <span className="back-btn-label">Back</span>
+          </button>
         </div>
       </div>
     );
@@ -410,7 +610,7 @@ export default function App() {
   if (gameMode === "menu") {
     return (
       <div className={`app-container ${getBackgroundClass()} ${settings.darkMode ? "dark" : ""}`}>
-        <button className="settings-button" onClick={() => setGameMode("settings")}>⚙️</button>
+  <button className="settings-button large" onClick={() => setGameMode("settings")}> <SettingsIcon size={40} color="var(--blue-500)" strokeWidth={2.2} /> </button>
 
         <div className="center-card card">
           <h1 className="main-title">Tic Tac Toe</h1>
@@ -434,14 +634,20 @@ export default function App() {
 
       {!winner && <HoldToReturnButton />}
 
-      <div className={`board-wrap ${winner ? "blurred" : ""}`}>
-        <ScoreBoard />
-      </div>
+      <ScoreBoard />
+      <div className={`board-wrap ${winner ? "blurred" : ""}`}></div>
 
       <div className={`board-area ${winner && !isDraw ? "game-over" : ""}`}>
-        <div className="board card-inner">
+        <div className={`board card-inner${botThinking ? " magic-ai" : ""}`}> 
           {board.map((sq, i) => (
-            <Square key={i} value={sq} onClick={() => handleClick(i)} />
+            <div key={i} style={{position: "relative"}}>
+              <Square
+                value={sq}
+                onClick={() => handleClick(i)}
+                className={aiMoveIndex === i ? "ai-wobble" : ""}
+              />
+              {aiMoveIndex === i && <div className="ai-wave" />}
+            </div>
           ))}
         </div>
       </div>
@@ -453,7 +659,6 @@ export default function App() {
               {winner === "X" ? <XIcon className="x-large" size={72} /> : <OIcon className="o-large" size={72} />}
             </div>
             <h2 className={`winner-title ${winner === "X" ? "red" : "blue"}`}>{winner === "X" ? "Red" : "Blue"} Wins!</h2>
-
             <div className="modal-actions">
               <button className="btn primary" onClick={resetGame}>Play Again</button>
               <button className="btn" onClick={backToMenu}>Return to Home</button>
